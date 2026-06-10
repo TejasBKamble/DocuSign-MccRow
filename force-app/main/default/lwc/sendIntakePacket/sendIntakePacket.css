@@ -1,0 +1,14 @@
+.info-box {
+    background   : #eaf3fb;
+    border       : 1px solid #2e75b6;
+    border-radius: 4px;
+    padding      : 8px 12px;
+    color        : #1a4f7a;
+    font-size    : 13px;
+}
+.field-error {
+    color      : #c0392b;
+    font-size  : 12px;
+    margin-top : 4px;
+    margin-left: 2px;
+}

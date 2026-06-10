@@ -1,0 +1,208 @@
+<apex:page controller="IntakeFormPDFController"
+           renderAs="pdf"
+           showHeader="false"
+           sidebar="false"
+           standardStylesheets="false"
+           applyHtmlTag="false"
+           applyBodyTag="false">
+
+<!-- ── CACHE PATH: render pre-built HTML directly ── -->
+  <apex:outputPanel rendered="{!useCache}">
+      <apex:outputText value="{!cachedHtml}" escape="false"/>
+  </apex:outputPanel>
+
+<!-- ── NORMAL PATH: original live-render logic ── -->
+
+<html>
+<head>
+  <style type="text/css">
+    @page {
+      margin: 0.5in;
+    }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 10pt;
+      color: #222222;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 2px solid #1a237e;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+    .firm-name {
+      font-size: 18pt;
+      font-weight: bold;
+      color: #1a237e;
+    }
+    .doc-title {
+      font-size: 11pt;
+      color: #444444;
+      margin-top: 3px;
+    }
+    .meta {
+      font-size: 9pt;
+      color: #555555;
+      margin-top: 5px;
+    }
+    .section-title {
+      background-color: #1a237e;
+      color: #523e3e;
+      font-size: 10pt;
+      font-weight: bold;
+      padding: 5px 8px;
+      margin-top: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    td {
+      padding: 5px 8px;
+      border-bottom: 1px solid #423b3b;
+      vertical-align: top;
+      font-size: 9pt;
+    }
+    td.lbl {
+      font-weight: bold;
+      width: 38%;
+      background-color: #4f4949;
+    }
+    .error {
+      border: 1px solid #cc0000;
+      color: #660000;
+      padding: 10px;
+      margin-bottom: 12px;
+      font-size: 10pt;
+    }
+    .footer {
+      margin-top: 18px;
+      border-top: 1px solid #3a3939;
+      padding-top: 6px;
+      font-size: 8pt;
+      color: #777777;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="firm-name">McCraw Law Group</div>
+    <div class="doc-title">Client Intake Form - Submitted Copy</div>
+    <div class="meta">
+      Incident Type: <strong><apex:outputText value="{!displayIncidentType}"/></strong>
+      &#160;|&#160;
+      Client: <strong><apex:outputText value="{!displaySignerName}"/></strong>
+      &#160;|&#160;
+      Submitted: <strong><apex:outputText value="{!submittedDateText}"/></strong>
+    </div>
+  </div>
+
+  <apex:outputPanel rendered="{!hasError}">
+    <div class="error">
+      PDF could not be populated: <apex:outputText value="{!errorMessage}"/>
+    </div>
+  </apex:outputPanel>
+
+  <div class="section-title">Personal Information</div>
+  <table>
+    <apex:repeat value="{!personalSection}" var="row">
+      <tr>
+        <td class="lbl"><apex:outputText value="{!row.label}"/></td>
+        <td><apex:outputText value="{!row.val}"/></td>
+      </tr>
+    </apex:repeat>
+  </table>
+
+  <div class="section-title">Emergency Contact</div>
+  <table>
+    <apex:repeat value="{!emergencySection}" var="row">
+      <tr>
+        <td class="lbl"><apex:outputText value="{!row.label}"/></td>
+        <td><apex:outputText value="{!row.val}"/></td>
+      </tr>
+    </apex:repeat>
+  </table>
+
+  <div class="section-title">Occupation</div>
+  <table>
+    <apex:repeat value="{!occupationSection}" var="row">
+      <tr>
+        <td class="lbl"><apex:outputText value="{!row.label}"/></td>
+        <td><apex:outputText value="{!row.val}"/></td>
+      </tr>
+    </apex:repeat>
+  </table>
+
+  <div class="section-title">Health Insurance</div>
+  <table>
+    <apex:repeat value="{!healthSection}" var="row">
+      <tr>
+        <td class="lbl"><apex:outputText value="{!row.label}"/></td>
+        <td><apex:outputText value="{!row.val}"/></td>
+      </tr>
+    </apex:repeat>
+  </table>
+
+  <div class="section-title">Injuries</div>
+  <table>
+    <apex:repeat value="{!injuriesSection}" var="row">
+      <tr>
+        <td class="lbl"><apex:outputText value="{!row.label}"/></td>
+        <td><apex:outputText value="{!row.val}"/></td>
+      </tr>
+    </apex:repeat>
+  </table>
+
+  <div class="section-title">Incident Details</div>
+  <table>
+    <apex:repeat value="{!incidentSection}" var="row">
+      <tr>
+        <td class="lbl"><apex:outputText value="{!row.label}"/></td>
+        <td><apex:outputText value="{!row.val}"/></td>
+      </tr>
+    </apex:repeat>
+  </table>
+
+  <apex:outputPanel rendered="{!showMotorVehicle}">
+    <div class="section-title">Motor Vehicle Insurance</div>
+    <table>
+      <apex:repeat value="{!motorVehicleSection}" var="row">
+        <tr>
+          <td class="lbl"><apex:outputText value="{!row.label}"/></td>
+          <td><apex:outputText value="{!row.val}"/></td>
+        </tr>
+      </apex:repeat>
+    </table>
+  </apex:outputPanel>
+
+  <apex:outputPanel rendered="{!showAnimal}">
+    <div class="section-title">Animal Attack Details</div>
+    <table>
+      <apex:repeat value="{!animalSection}" var="row">
+        <tr>
+          <td class="lbl"><apex:outputText value="{!row.label}"/></td>
+          <td><apex:outputText value="{!row.val}"/></td>
+        </tr>
+      </apex:repeat>
+    </table>
+  </apex:outputPanel>
+
+  <apex:outputPanel rendered="{!showPremise}">
+    <div class="section-title">Premises Details</div>
+    <table>
+      <apex:repeat value="{!premiseSection}" var="row">
+        <tr>
+          <td class="lbl"><apex:outputText value="{!row.label}"/></td>
+          <td><apex:outputText value="{!row.val}"/></td>
+        </tr>
+      </apex:repeat>
+    </table>
+  </apex:outputPanel>
+
+  <div class="footer">
+    McCraw Law Group - Confidential Client Intake Document | This document is generated automatically upon form submission.
+  </div>
+</body>
+</html>
+</apex:page>

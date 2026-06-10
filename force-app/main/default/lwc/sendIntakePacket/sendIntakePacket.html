@@ -1,0 +1,113 @@
+<template>
+    <lightning-card title="Send Intake Packet" icon-name="custom:custom18">
+        <div class="slds-p-around_medium">
+
+            <!-- LOADING SPINNER -->
+            <template if:true={isLoading}>
+                <div class="slds-align_absolute-center slds-m-bottom_small">
+                    <lightning-spinner
+                        alternative-text="Loading"
+                        size="small">
+                    </lightning-spinner>
+                </div>
+            </template>
+
+            <!-- INCIDENT TYPE -->
+            <lightning-combobox
+                label="Incident Type"
+                value={incidentType}
+                options={incidentTypeOptions}
+                required
+                onchange={handleIncidentType}>
+            </lightning-combobox>
+
+         
+
+            <!-- SIGNER TYPE -->
+            <div class="slds-m-top_medium">
+                <lightning-combobox
+                    label="Signer Type"
+                    value={signerType}
+                    options={signerTypeOptions}
+                    required
+                    onchange={handleSignerType}>
+                </lightning-combobox>
+            </div>
+
+            <!-- SIGNER NAME — prefilled from Lead -->
+            <div class="slds-m-top_medium">
+                <lightning-input
+                    label="Signer Full Name"
+                    value={signerName}
+                    required
+                    onchange={handleSignerName}>
+                </lightning-input>
+            </div>
+
+            <!-- SIGNER EMAIL — prefilled from Lead -->
+            <div class="slds-m-top_medium">
+                <lightning-input
+                    type="email"
+                    label="Signer Email"
+                    value={signerEmail}
+                    required
+                    onchange={handleSignerEmail}>
+                </lightning-input>
+            </div>
+
+            <!-- SIGNER PHONE — prefilled from Lead -->
+            <div class="slds-m-top_medium">
+                <lightning-input
+                    type="tel"
+                    label="Signer Phone"
+                    value={signerPhone}
+                    onchange={handleSignerPhone}>
+                </lightning-input>
+            </div>
+
+            <!-- SEND CHANNEL -->
+            <div class="slds-m-top_medium">
+                <lightning-combobox
+                    label="Send Via"
+                    value={sendChannel}
+                    options={sendChannelOptions}
+                    required
+                    onchange={handleSendChannel}>
+                </lightning-combobox>
+            </div>
+               <!-- INCIDENT INFO BOX -->
+            <template if:true={showIncidentInfo}>
+                <div class="info-box slds-m-top_small">
+                    <p>📋 {incidentInfoText}</p>
+                </div>
+            </template>
+
+            <!-- ERROR MESSAGE -->
+            <template if:true={errorMessage}>
+                <div class="slds-m-top_medium">
+                    <p class="slds-text-color_error">⚠️ {errorMessage}</p>
+                </div>
+            </template>
+
+            <!-- BUTTONS -->
+            <div class="slds-m-top_large slds-grid slds-gutters">
+                <div class="slds-col">
+                    <lightning-button
+                        label="Cancel"
+                        onclick={handleCancel}
+                        disabled={isLoading}>
+                    </lightning-button>
+                </div>
+                <div class="slds-col slds-text-align_right">
+                    <lightning-button
+                        variant="brand"
+                        label={sendButtonLabel}
+                        onclick={handleSend}
+                        disabled={isLoading}>
+                    </lightning-button>
+                </div>
+            </div>
+
+        </div>
+    </lightning-card>
+</template>

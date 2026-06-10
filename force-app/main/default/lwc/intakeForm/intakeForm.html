@@ -1,0 +1,878 @@
+<template>
+    <div class="intake-wrapper">
+
+         <header class="firm-header">
+            <img src={logoURL} alt="McCraw Law Group" class="header-logo" />
+        </header>
+
+        <!-- LOADING -->
+        <template if:true={isLoading}>
+            <div class="loading-screen">
+                <lightning-spinner alternative-text="Loading" size="large">
+                </lightning-spinner>
+            </div>
+        </template>
+
+        <!-- ERROR -->
+        <template if:true={hasError}>
+            <div class="error-screen">
+                <div class="error-box">
+                    <p>⚠️ {errorMessage}</p>
+                </div>
+            </div>
+        </template>
+
+        <!-- MAIN FORM -->
+        <template if:true={showForm}>
+
+            <!-- WELCOME SCREEN -->
+            <template if:true={isWelcomeStep}>
+                <div class="welcome-screen">
+                    <div class="welcome-card">
+                        <div class="firm-logo">⚖️</div>
+                        <h1>Welcome to McCraw Law Group</h1>
+                        <p>Please fill out your confidential personal injury questionnaire.</p>
+                        <p class="welcome-sub">This should take approximately 5-10 minutes.</p>
+                        <lightning-button
+                            variant="brand"
+                            label="Start"
+                            onclick={handleStart}
+                            class="start-btn">
+                        </lightning-button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- FORM STEPS -->
+            <template if:false={isWelcomeStep}>
+                <div class="form-container">
+
+                    <!-- PROGRESS BAR -->
+                 <!-- Replace the entire progress section with this -->
+                       <div class={progressBarClass}
+                    lwc:dom="manual"
+                    data-id="progressFill">
+                </div>
+
+                    <!-- ══ STEP 1: CONTACT DETAIL ══ -->
+                    <template if:true={isStep1}>
+                        <div class="form-step">
+                            <h2 class="step-title">Contact Detail</h2>
+
+                            <lightning-input
+                                label="Full Name"
+                                value={formData.fullName}
+                                data-field="fullName"
+                                onchange={handleFieldChange}
+                                required>
+                            </lightning-input>
+
+                            <div class="slds-m-top_small">
+                                <lightning-input
+                                    label="Address"
+                                    value={formData.street}
+                                    data-field="street"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-input>
+                            </div>
+
+                            <div class="slds-grid slds-gutters slds-m-top_small">
+                                <div class="slds-col slds-size_1-of-3">
+                                    <lightning-input
+                                        label="City"
+                                        value={formData.city}
+                                        data-field="city"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-3">
+                                    <lightning-input
+                                        label="State"
+                                        value={formData.state}
+                                        data-field="state"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-3">
+                                    <lightning-input
+                                        label="Zip Code"
+                                        value={formData.postalCode}
+                                        data-field="postalCode"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                            </div>
+                            <!-- <div class="slds-grid slds-gutters slds-m-top_small">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-combobox
+                                        label="Country"
+                                        value={formData.country}
+                                        options={countryOptions}
+                                        data-field="country"
+                                        onchange={handleFieldChange}>
+                                    </lightning-combobox>
+                                </div>
+                            </div> -->
+
+                            <div class="slds-m-top_small">
+                                <lightning-input
+                                    type="tel"
+                                    label="Phone Number"
+                                    value={formData.phone}
+                                    data-field="phone"
+                                    placeholder="(XXX) XXX-XXXX"
+                                    maxlength="14"
+                                    onkeyup={handlePhoneKeyup}
+                                    onchange={handlePhoneChange}>
+                                </lightning-input>
+                                <template if:true={phoneError}>
+                                    <p class="field-error">{phoneError}</p>
+                                </template>
+                            </div>
+
+                            <div class="slds-m-top_small">
+                                <lightning-input
+                                    type="email"
+                                    label="Email"
+                                    value={formData.email}
+                                    data-field="email"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-input>
+                            </div>
+
+                            <div class="slds-m-top_small">
+                                <template if:true={hasHowDidYouHear}>
+                                    <lightning-input
+                                        label="How Did You Hear About Us?"
+                                        value={formData.howDidYouHear}
+                                        readonly>
+                                    </lightning-input>
+                                </template>
+                                <template if:false={hasHowDidYouHear}>
+                                    <lightning-combobox
+                                        label="How Did You Hear About Us?"
+                                        value={formData.howDidYouHear}
+                                        options={howDidYouHearOptions}
+                                        data-field="howDidYouHear"
+                                        onchange={handleFieldChange}>
+                                    </lightning-combobox>
+                                </template>
+                            </div>
+
+                            <div class="slds-m-top_small">
+                                <lightning-input
+                                    type="date"
+                                    label="Date of Birth"
+                                    value={formData.dateOfBirth}
+                                    data-field="dateOfBirth"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-input>
+                            </div>
+
+                            <!-- <div class="slds-m-top_small">
+                                <lightning-input
+                                    label="Social Security No."
+                                    value={formData.ssn}
+                                    data-field="ssn"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-input>
+                            </div> -->
+                            <div class="slds-m-top_small">
+    <lightning-input
+        label="Social Security No."
+        value={formData.ssn}
+        data-field="ssn"
+        placeholder="XXX-XX-XXXX"
+        maxlength="11"
+        onchange={handleSsnChange}
+        onkeyup={handleSsnKeyup}>
+    </lightning-input>
+    <template if:true={ssnError}>
+        <p class="field-error">{ssnError}</p>
+    </template>
+</div>
+
+                            <div class="slds-m-top_small">
+                                <lightning-input
+                                    label="Driver's License # / State"
+                                    value={formData.driversLicense}
+                                    data-field="driversLicense"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-input>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- ══ STEP 2: EMERGENCY CONTACT ══ -->
+                    <template if:true={isStep2}>
+                        <div class="form-step">
+                            <h2 class="step-title">Emergency Contact</h2>
+
+                            <lightning-input
+                                label="Name"
+                                value={formData.emergencyName}
+                                data-field="emergencyName"
+                                onchange={handleFieldChange}
+                                required>
+                            </lightning-input>
+
+                            <div class="slds-m-top_small">
+                                <lightning-input
+                                    label="Address"
+                                    value={formData.emergencyAddress}
+                                    data-field="emergencyAddress"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-input>
+                            </div>
+
+                            <div class="slds-m-top_small">
+                                <lightning-input
+                                    type="tel"
+                                    label="Phone Number"
+                                    value={formData.emergencyPhone}
+                                    data-field="emergencyPhone"
+                                    placeholder="(XXX) XXX-XXXX"
+                                    maxlength="14"
+                                    onkeyup={handleEmergencyPhoneKeyup}
+                                    onchange={handleEmergencyPhoneChange}>
+                                </lightning-input>
+                                <template if:true={emergencyPhoneError}>
+                                    <p class="field-error">{emergencyPhoneError}</p>
+                                </template>
+                            </div>
+
+                            <div class="slds-m-top_small">
+                                <lightning-input
+                                    label="Relation to You"
+                                    value={formData.emergencyRelation}
+                                    data-field="emergencyRelation"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-input>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- ══ STEP 3: OCCUPATION ══ -->
+                    <template if:true={isStep3}>
+                        <div class="form-step">
+                            <h2 class="step-title">Occupation</h2>
+
+                            <lightning-input
+                                label="Current Employer"
+                                value={formData.currentEmployer}
+                                data-field="currentEmployer"
+                                onchange={handleFieldChange}
+                                required>
+                            </lightning-input>
+
+                            <div class="slds-m-top_medium">
+                                <p class="field-label">
+                                    Have you lost or do you anticipate losing
+                                    any time from work for your injuries?
+                                </p>
+                                <div class="radio-group">
+                                    <label class="radio-option">
+                                        <input
+                                            type="radio"
+                                            name="lostWork"
+                                            value="Yes"
+                                            checked={lostWorkYes}
+                                            onchange={handleLostWork}/>
+                                        Yes
+                                    </label>
+                                    <label class="radio-option">
+                                        <input
+                                            type="radio"
+                                            name="lostWork"
+                                            value="No"
+                                            checked={lostWorkNo}
+                                            onchange={handleLostWork}/>
+                                        No
+                                    </label>
+                                </div>
+                            </div>
+
+                            <template if:true={showLostWorkDesc}>
+                                <div class="slds-m-top_small">
+                                    <lightning-textarea
+                                        label="Describe"
+                                        value={formData.lostWorkDescription}
+                                        data-field="lostWorkDescription"
+                                        onchange={handleFieldChange}>
+                                    </lightning-textarea>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- ══ STEP 4: HEALTH INSURANCE ══ -->
+                    <template if:true={isStep4}>
+                        <div class="form-step">
+                            <h2 class="step-title">Health Insurance Information</h2>
+
+                            <p class="field-label">Do you have health insurance?</p>
+                            <div class="radio-group">
+                                <label class="radio-option">
+                                    <input type="radio" name="hasInsurance"
+                                        value="Yes" checked={hasInsuranceYes}
+                                        onchange={handleHasInsurance}/>
+                                    Yes
+                                </label>
+                                <label class="radio-option">
+                                    <input type="radio" name="hasInsurance"
+                                        value="No" checked={hasInsuranceNo}
+                                        onchange={handleHasInsurance}/>
+                                    No
+                                </label>
+                            </div>
+
+                            <template if:true={showInsuranceCarrier}>
+                                <div class="slds-m-top_small">
+                                    <lightning-input
+                                        label="If yes, please list carrier name"
+                                        value={formData.insuranceCarrierName}
+                                        data-field="insuranceCarrierName"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                            </template>
+
+                            <div class="slds-m-top_medium">
+                                <p class="field-label">
+                                    Do you receive Medicare, Medicaid, AARRP,
+                                    SSDI, VA or other government benefits?
+                                </p>
+                                <div class="radio-group">
+                                    <label class="radio-option">
+                                        <input type="radio" name="hasGovBenefits"
+                                            value="Yes" checked={hasGovBenefitsYes}
+                                            onchange={handleGovBenefits}/>
+                                        Yes
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="hasGovBenefits"
+                                            value="No" checked={hasGovBenefitsNo}
+                                            onchange={handleGovBenefits}/>
+                                        No
+                                    </label>
+                                </div>
+                            </div>
+
+                            <template if:true={showGovBenefitsName}>
+                                <div class="slds-m-top_small">
+                                    <lightning-input
+                                        label="If yes, please list name"
+                                        value={formData.govBenefitsName}
+                                        data-field="govBenefitsName"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
+                    <!-- ══ STEP 5: INJURIES / MEDICAL ══ -->
+                    <template if:true={isStep5}>
+                        <div class="form-step">
+                            <h2 class="step-title">Injuries / Medical Treatment</h2>
+
+                            <lightning-textarea
+                                label="List the injuries suffered in this incident"
+                                value={formData.injuries}
+                                data-field="injuries"
+                                onchange={handleFieldChange}
+                                required>
+                            </lightning-textarea>
+
+                            <div class="slds-m-top_medium">
+                                <p class="field-label">
+                                    Were you transported by ambulance to a hospital?
+                                </p>
+                                <div class="radio-group">
+                                    <label class="radio-option">
+                                        <input type="radio" name="ambulance"
+                                            value="Yes" checked={ambulanceYes}
+                                            onchange={handleAmbulance}/>
+                                        Yes
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="ambulance"
+                                            value="No" checked={ambulanceNo}
+                                            onchange={handleAmbulance}/>
+                                        No
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="slds-m-top_small">
+                                <lightning-textarea
+                                    label="List all doctors and facilities (name/location)
+                                           who have treated you for this incident"
+                                    value={formData.treatingProviders}
+                                    data-field="treatingProviders"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-textarea>
+                            </div>
+
+                            <div class="slds-m-top_small">
+                                <lightning-textarea
+                                    label="List any prior injuries or illnesses that were
+                                           made worse by this accident, if any"
+                                    value={formData.priorInjuries}
+                                    data-field="priorInjuries"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-textarea>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- ══ STEP 6: INCIDENT INFORMATION ══ -->
+                    <template if:true={isStep6}>
+                        <div class="form-step">
+                            <h2 class="step-title">Incident Information</h2>
+
+                            <template if:true={hasIncidentType}>
+                                <lightning-input
+                                    label="Type of Incident"
+                                    value={displayIncidentType}
+                                    readonly>
+                                </lightning-input>
+                            </template>
+
+                            <div class="slds-m-top_small">
+                                <lightning-input
+                                    type="date"
+                                    label="Date of Incident"
+                                    value={formData.incidentDate}
+                                    data-field="incidentDate"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-input>
+                            </div>
+
+                            <div class="slds-m-top_small">
+                                <lightning-input
+                                    label="Location of Incident"
+                                    value={formData.incidentLocation}
+                                    data-field="incidentLocation"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-input>
+                            </div>
+
+                            <div class="slds-m-top_medium">
+                                <p class="field-label">
+                                    Were you on the job when the incident occurred?
+                                </p>
+                                <div class="radio-group">
+                                    <label class="radio-option">
+                                        <input type="radio" name="onJob"
+                                            value="Yes" checked={onJobYes}
+                                            onchange={handleOnJob}/>
+                                        Yes
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="onJob"
+                                            value="No" checked={onJobNo}
+                                            onchange={handleOnJob}/>
+                                        No
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="slds-m-top_medium">
+                                <p class="field-label">Did the authorities arrive?</p>
+                                <div class="radio-group">
+                                    <label class="radio-option">
+                                        <input type="radio" name="authoritiesArrived"
+                                            value="Yes" checked={authoritiesYes}
+                                            onchange={handleAuthorities}/>
+                                        Yes
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="authoritiesArrived"
+                                            value="No" checked={authoritiesNo}
+                                            onchange={handleAuthorities}/>
+                                        No
+                                    </label>
+                                </div>
+                            </div>
+
+                            <template if:true={showAuthoritiesWhom}>
+                                <div class="slds-m-top_small">
+                                    <lightning-input
+                                        label="If any, whom?"
+                                        value={formData.authoritiesWhom}
+                                        data-field="authoritiesWhom"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                            </template>
+
+                            <div class="slds-m-top_medium">
+                                <p class="field-label">Was any report taken?</p>
+                                <div class="radio-group">
+                                    <label class="radio-option">
+                                        <input type="radio" name="reportTaken"
+                                            value="Yes" checked={reportTakenYes}
+                                            onchange={handleReportTaken}/>
+                                        Yes
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="reportTaken"
+                                            value="No" checked={reportTakenNo}
+                                            onchange={handleReportTaken}/>
+                                        No
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="slds-m-top_medium">
+                                <p class="field-label">
+                                    Was anyone given a citation at the scene?
+                                </p>
+                                <div class="radio-group">
+                                    <label class="radio-option">
+                                        <input type="radio" name="citationGiven"
+                                            value="Yes" checked={citationYes}
+                                            onchange={handleCitation}/>
+                                        Yes
+                                    </label>
+                                    <label class="radio-option">
+                                        <input type="radio" name="citationGiven"
+                                            value="No" checked={citationNo}
+                                            onchange={handleCitation}/>
+                                        No
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="slds-m-top_small">
+                                <lightning-textarea
+                                    label="List all involved parties and witnesses'
+                                           names & contact info (if any)"
+                                    value={formData.witnessDetails}
+                                    data-field="witnessDetails"
+                                    onchange={handleFieldChange}>
+                                </lightning-textarea>
+                            </div>
+
+                            <div class="slds-m-top_small">
+                                <lightning-textarea
+                                    label="Describe How the Incident Happened"
+                                    value={formData.descriptionOfAccident}
+                                    data-field="descriptionOfAccident"
+                                    onchange={handleFieldChange}
+                                    required>
+                                </lightning-textarea>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- ══ STEP 7: DYNAMIC SECTION ══ -->
+                    <template if:true={isStep7}>
+
+                        <!-- MOTOR VEHICLE -->
+                        <template if:true={showMotorVehicleSection}>
+                            <div class="form-step">
+                                <h2 class="step-title">Motor Vehicle Accidents Only</h2>
+
+                                <p class="read-only-label">
+                                    Auto - Insurance Information - Coverage for
+                                    Client (Plaintiff)
+                                </p>
+                                <lightning-input
+                                    label="Name of Insurance Carrier(s) for you"
+                                    value={formData.plaintiffCarrierName}
+                                    data-field="plaintiffCarrierName"
+                                    onchange={handleFieldChange}>
+                                </lightning-input>
+                                <div class="slds-m-top_small">
+                                    <lightning-input
+                                        label="List Policy or Claim Information you have"
+                                        value={formData.plaintiffPolicyClaim}
+                                        data-field="plaintiffPolicyClaim"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+
+                                <p class="read-only-label slds-m-top_medium">
+                                    Auto - Insurance Information - Coverage for
+                                    At-Fault Party (Defendant)
+                                </p>
+                                <lightning-input
+                                    label="Name of Insurance Carrier(s) for the at-fault party"
+                                    value={formData.defendantCarrierName}
+                                    data-field="defendantCarrierName"
+                                    onchange={handleFieldChange}>
+                                </lightning-input>
+                                <div class="slds-m-top_small">
+                                    <lightning-input
+                                        label="List Policy or Claim Information if you have"
+                                        value={formData.defendantPolicyClaim}
+                                        data-field="defendantPolicyClaim"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- PREMISE INJURY -->
+                        <template if:true={showPremiseSection}>
+                            <div class="form-step">
+                                <h2 class="step-title">Premise Injuries - Only</h2>
+
+                                <p class="read-only-label">
+                                    Information for at-fault party
+                                </p>
+                                <lightning-input
+                                    label="Name of At-Fault Party/Entity"
+                                    value={formData.atFaultPartyName}
+                                    data-field="atFaultPartyName"
+                                    onchange={handleFieldChange}>
+                                </lightning-input>
+                                <div class="slds-m-top_small">
+                                    <lightning-input
+                                        label="Address/Phone Number for At-Fault Party/Entity"
+                                        value={formData.atFaultPartyAddressPhone}
+                                        data-field="atFaultPartyAddressPhone"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- ANIMAL ATTACK -->
+                        <template if:true={showAnimalSection}>
+                            <div class="form-step">
+                                <h2 class="step-title">Animal Attack - Only</h2>
+
+                                <p class="read-only-label">
+                                    Information For At-Fault Party
+                                </p>
+                                <lightning-input
+                                    label="Name of Animal Owner"
+                                    value={formData.animalOwnerName}
+                                    data-field="animalOwnerName"
+                                    onchange={handleFieldChange}>
+                                </lightning-input>
+                                <div class="slds-m-top_small">
+                                    <lightning-input
+                                        label="Address/Phone Number for Animal Owner"
+                                        value={formData.animalOwnerAddressPhone}
+                                        data-field="animalOwnerAddressPhone"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-m-top_small">
+                                    <lightning-input
+                                        label="Name of Homeowner or Business Owner
+                                               (if different from Animal Owner)"
+                                        value={formData.homeOwnerName}
+                                        data-field="homeOwnerName"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-m-top_small">
+                                    <lightning-input
+                                        label="Breed/Type of Animal, if known"
+                                        value={formData.animalBreed}
+                                        data-field="animalBreed"
+                                        onchange={handleFieldChange}>
+                                    </lightning-input>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- OTHER (Product Liability / Other) -->
+                        <template if:true={showOtherSection}>
+                            <div class="form-step">
+                                <h2 class="step-title">Additional Information</h2>
+                                <lightning-textarea
+                                    label="Please provide any additional details
+                                           about the incident"
+                                    value={formData.additionalIncidentDetails}
+                                    data-field="additionalIncidentDetails"
+                                    onchange={handleFieldChange}>
+                                </lightning-textarea>
+                            </div>
+                        </template>
+
+                    </template>
+
+                    <!-- ══ STEP 8: SUMMARY ══ -->
+                    <template if:true={isStep8}>
+                        <div class="form-step">
+                            <h2 class="step-title">Summary</h2>
+                            <p class="summary-sub">
+                                Please review the information you have entered:
+                            </p>
+
+                            <!-- Contact Detail -->
+                            <div class="summary-section">
+                                <div class="summary-header">
+                                    <span>Contact Detail</span>
+                                    <lightning-button-icon
+                                        icon-name="utility:edit"
+                                        variant="bare"
+                                        onclick={goToStep1}>
+                                    </lightning-button-icon>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Full Name</p>
+                                    <p class="summary-value">{formData.fullName}</p>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Address</p>
+                                    <p class="summary-value">{formData.street}</p>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Phone</p>
+                                    <p class="summary-value">{formData.phone}</p>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Email</p>
+                                    <p class="summary-value">{formData.email}</p>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Date of Birth</p>
+                                    <p class="summary-value">{formData.dateOfBirth}</p>
+                                </div>
+                            </div>
+
+                            <!-- Emergency Contact -->
+                            <div class="summary-section">
+                                <div class="summary-header">
+                                    <span>Emergency Contact</span>
+                                    <lightning-button-icon
+                                        icon-name="utility:edit"
+                                        variant="bare"
+                                        onclick={goToStep2}>
+                                    </lightning-button-icon>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Name</p>
+                                    <p class="summary-value">{formData.emergencyName}</p>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Relation</p>
+                                    <p class="summary-value">{formData.emergencyRelation}</p>
+                                </div>
+                            </div>
+
+                            <!-- Incident -->
+                            <div class="summary-section">
+                                <div class="summary-header">
+                                    <span>Incident Information</span>
+                                    <lightning-button-icon
+                                        icon-name="utility:edit"
+                                        variant="bare"
+                                        onclick={goToStep6}>
+                                    </lightning-button-icon>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Incident Date</p>
+                                    <p class="summary-value">{formData.incidentDate}</p>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Location</p>
+                                    <p class="summary-value">{formData.incidentLocation}</p>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Description</p>
+                                    <p class="summary-value">{formData.descriptionOfAccident}</p>
+                                </div>
+                            </div>
+
+                            <!-- Injuries -->
+                            <div class="summary-section">
+                                <div class="summary-header">
+                                    <span>Injuries / Medical</span>
+                                    <lightning-button-icon
+                                        icon-name="utility:edit"
+                                        variant="bare"
+                                        onclick={goToStep5}>
+                                    </lightning-button-icon>
+                                </div>
+                                <div class="summary-row">
+                                    <p class="summary-label">Injuries</p>
+                                    <p class="summary-value">{formData.injuries}</p>
+                                </div>
+                            </div>
+
+                        </div>
+                    </template>
+
+                    <!-- ERROR MESSAGE -->
+                    <template if:true={hasFormError}>
+                        <div class="error-box slds-m-top_small">
+                            <p>⚠️ {formErrorMessage}</p>
+                        </div>
+                    </template>
+
+                    <!-- NAVIGATION BUTTONS -->
+                    <div class="nav-buttons">
+                        <template if:true={showBackButton}>
+                            <lightning-button
+                                label="Back"
+                                onclick={handleBack}
+                                disabled={isSubmitting}>
+                            </lightning-button>
+                        </template>
+
+                        <template if:true={showNextButton}>
+                            <lightning-button
+                                variant="brand"
+                                label="Next"
+                                onclick={handleNext}
+                                disabled={isSubmitting}>
+                            </lightning-button>
+                        </template>
+
+                        <template if:true={showSubmitButton}>
+                            <lightning-button
+                                variant="brand"
+                                label={submitButtonLabel}
+                                onclick={handleSubmit}
+                                disabled={isSubmitting}>
+                            </lightning-button>
+                        </template>
+                    </div>
+
+                    <!-- FOOTER -->
+                    
+
+                </div>
+            </template>
+
+        </template>
+ <footer class="firm-footer">
+            <div class="footer-inner">
+                <img src={logoURL} alt="McCraw Law Group" class="footer-logo" />
+                <p class="footer-tagline">
+                    McCraw Law Group<br>
+                   Compassionate Care. <br>
+                   Service Specific to You.<br>
+                   Proven Results.
+                </p>
+                <p class="footer-links">
+                    <a href="https://mccrawlawgroup.com/">Our Site.</a>
+                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                    <a href="https://mccrawlawgroup.com/locations/">Our Locations.</a>
+                </p>
+                <p class="footer-copy">
+                    © 2026 McCraw Law Group. All rights reserved.
+                </p>
+            </div>
+        </footer>
+    </div>
+</template>
