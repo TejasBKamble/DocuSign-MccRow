@@ -1,0 +1,535 @@
+╔══════════════════════════════════════════════════════════════════════════════════════════╗
+║         McCRAW LAW GROUP — INTAKE AUTOMATION PROJECT SUMMARY                            ║
+║         Easy-to-Understand Guide | Built by Tejas | June 2026                           ║
+╚══════════════════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  WHAT IS THIS PROJECT?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  McCraw Law Group needed a way to:
+  1. Send a secure form link to clients via email
+  2. Client fills a branded multi-step form
+  3. Data auto-saves to Salesforce Lead
+  4. Client signs legal documents in DocuSign
+  5. Signed documents auto-attach to the Lead
+
+  Think of it as:
+  "One link → Fill form → Sign documents → Everything saved automatically"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  THE COMPLETE JOURNEY (Step by Step)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  STEP 1: Staff sends intake packet
+  ----------------------------------
+  - Staff opens Lead in Salesforce
+  - Clicks "Send Intake Packet" Quick Action button
+  - Popup shows with Lead info already prefilled:
+      Signer Name  <- Lead FirstName + LastName
+      Signer Email <- Lead Email
+      Signer Phone <- Lead Phone
+      Incident Type <- Lead Type_of_Accident__c
+  - Staff selects Signer Type and clicks Send
+  - System creates SESSION RECORD and sends EMAIL to client
+
+  CODE USED:
+    LWC : sendIntakePacket.html / sendIntakePacket.js
+    APEX: SendIntakePacketController.cls
+          calls IntakeSessionService.cls which:
+            Creates Intake_Session__c record
+            Generates 32-character random token
+            Builds URL: https://site.com/intake?token=abc123
+            Sends HTML email with "Click Here" button
+
+
+  STEP 2: Client opens the link
+  ------------------------------
+  - Client receives branded email
+  - Clicks "Click Here to Complete Your Intake Forms"
+  - Browser opens Experience Cloud page (Salesforce public site)
+  - intakeForm LWC loads automatically
+
+  CODE USED:
+    LWC : intakeForm.js -> loadSession() -> getSessionData(token)
+    APEX: IntakePrefillController.cls which:
+            Finds session by token
+            Checks validity (not expired, not already signed)
+            Reads Lead fields and returns prefill data
+            Marks session as "Opened"
+
+  PREFILL data returned to form:
+    fullName        <- Lead.FirstName + LastName
+    email           <- Lead.Email
+    phone           <- Lead.Phone
+    dateOfBirth     <- Lead.Date_of_Birth__c
+    incidentDate    <- Lead.Incident_Date__c
+    howDidYouHear   <- Lead.LeadSource
+    incidentType    <- Lead.Type_of_Accident__c
+    address fields  <- Lead.Street, City, State, PostalCode
+
+
+  STEP 3: Client fills the 8-step form
+  --------------------------------------
+  Step 1: Contact Detail
+    - Full Name, Address, City, State, Zip
+    - Phone (auto-formats: (XXX) XXX-XXXX)
+    - Email, How Did You Hear, Date of Birth
+    - SSN (auto-formats: XXX-XX-XXXX), Driver's License
+
+  Step 2: Emergency Contact
+    - Name, Address, Phone, Relation to You
+
+  Step 3: Occupation
+    - Current Employer
+    - Lost work time? Yes/No radio
+    - If Yes: describe
+
+  Step 4: Health Insurance
+    - Has health insurance? Yes/No
+    - If Yes: carrier name
+    - Government benefits? Yes/No
+    - If Yes: benefit name
+
+  Step 5: Injuries / Medical
+    - List of injuries
+    - Transported by ambulance? Yes/No
+    - Treating doctors/facilities
+    - Prior injuries made worse?
+
+  Step 6: Incident Information
+    - Date and Location of Incident
+    - Were you on the job? Yes/No
+    - Did authorities arrive? Yes/No
+    - Was report taken? Yes/No
+    - Citation given? Yes/No
+    - Witness details
+    - Description of incident
+
+  Step 7: DYNAMIC SECTION (changes by incident type):
+    Motor Vehicle  -> Plaintiff insurance, Defendant insurance
+    Premises Injury -> At-fault party name and address
+    Animal Attack  -> Animal owner, homeowner, breed
+    Other          -> Additional details
+
+  Step 8: Summary -> Review -> Submit
+
+  CODE USED:
+    LWC: intakeForm.html (all 8 step templates)
+    LWC: intakeForm.js (all handlers and validation)
+
+
+  STEP 4: Client clicks Submit
+  ------------------------------
+  - Client clicks "Submit and Continue to Sign"
+  - Form data converted to JSON and sent to Salesforce
+
+  CODE USED:
+    LWC : intakeForm.js -> handleSubmit()
+    APEX: IntakeSubmitController.cls -> submitForm()
+
+  IntakeSubmitController does IN ORDER:
+    1. Cleans HTML encoding from JSON (&quot; -> ")
+    2. Validates session and signer info
+    3. Finds right DocuSign template from metadata
+    --- CALLOUTS FIRST (Salesforce rule) ---
+    4. Creates DocuSign envelope with all form fields prefilled
+    5. Gets embedded signing URL from DocuSign
+    --- DML AFTER CALLOUTS ---
+    6. Updates session status to "Submitted"
+    7. Saves form JSON to session
+    8. Creates Task for staff review
+    9. Calls LeadUpdateService to update Lead fields
+    10. Returns signing URL to LWC
+
+  LWC receives URL and redirects:
+    window.location.href = result.signingURL;
+    -> Client goes to DocuSign
+
+
+  STEP 5: DocuSign Integration
+  -----------------------------
+  AUTHENTICATION (DocuSignAuthService.cls):
+    - No password needed, uses RSA private key
+    - Builds JWT token with: Integration Key + User ID + Account ID
+    - Signs with RSA Private Key stored in metadata
+    - Sends to: https://account-d.docusign.com/oauth/token
+    - Gets back: Bearer access_token (valid 1 hour)
+
+  CREATING ENVELOPE (DocuSignEnvelopeService.cls):
+    - Calls DocuSign API: POST /envelopes
+    - Sends: template ID + signer info + ALL form field values (tabs)
+    - DocuSign creates envelope and prefills all fields
+    - Returns: envelopeId
+
+  FIELD MAPPING (LWC key -> DocuSign tab label):
+    street           -> Address
+    phone            -> phoneNumber
+    email            -> Email
+    dateOfBirth      -> DateOfBirth
+    ssn              -> ssn
+    driversLicense   -> DriverLicenseState
+    emergencyName    -> EmergencyContactName
+    injuries         -> injuries
+    incidentDate     -> incidentDate
+    animalOwnerName  -> animalOwnerName
+    (and 20+ more fields)
+
+  Checkboxes also prefilled:
+    Yes_LostWork / No_LostWork
+    Yes_Insurance / No_Insurance
+    Yes_OnJob / No_OnJob
+    Yes_Authorities / No_Authorities
+    (and more)
+
+  GETTING SIGNING URL:
+    - Calls DocuSign API: POST /envelopes/{id}/views/recipient
+    - Sends: signer email + name + clientUserId
+    - Gets back: URL like https://demo.docusign.net/Signing/...
+    - This URL opens the signing form for the client
+    - NOTE: This URL expires after 5 minutes!
+
+
+  STEP 6: Client signs in DocuSign
+  ---------------------------------
+  - Client sees legal documents with all fields already filled
+  - They review and sign
+  - DocuSign sends WEBHOOK to Salesforce
+
+  WEBHOOK URL:
+    https://mccraw--partial.sandbox.my.site.com/services/apexrest/docusign/webhook/
+
+  CODE: DocuSignWebhookController.cls
+    - Receives POST request from DocuSign
+    - Parses JSON:
+        { "event": "envelope-completed",
+          "data": { "envelopeId": "xxx",
+                    "envelopeSummary": {"status": "completed"} } }
+    - Finds matching Intake_Session__c by envelope ID
+    - Updates session Status = "Signed"
+    - Creates Task for staff
+    - Sends email notification to Lead owner
+    - Schedules DocuSignDocumentScheduler 1 minute later
+
+
+  STEP 7: Documents auto-attach to Lead
+  --------------------------------------
+  TRIGGER (IntakeSessionTrigger.trigger):
+    - Fires when Status changes to "Signed"
+    - Calls IntakeSessionTriggerHandler
+    - Handler runs: System.enqueueJob(new DocuSignDocumentQueueable())
+    - IMPORTANT: Trigger runs in System context, not guest user!
+      Guest users cannot create files.
+
+  QUEUEABLE (DocuSignDocumentQueueable.cls):
+    --- ALL CALLOUTS FIRST ---
+    1. Gets fresh DocuSign access token
+    2. Verifies envelope is "completed"
+    3. Gets document list from DocuSign
+    4. Downloads SIGNED LEGAL DOCUMENT (PDF)
+    5. Downloads COMPLETION CERTIFICATE (audit log)
+    --- ALL DML AFTER ---
+    6. Creates ContentVersion for signed document
+    7. Creates ContentVersion for certificate
+    8. Links both files to Lead
+    9. Updates session Document_Attached__c = true
+
+  FILES ATTACHED TO LEAD:
+    Signed_Intake_John_Smith_2026-06-10.pdf          <- signed contract
+    Signing_Certificate_John_Smith_2026-06-10.pdf    <- DocuSign audit trail
+
+
+  STEP 8: Lead fields updated
+  ----------------------------
+  CODE: LeadUpdateService.cls
+    - Runs as @future (async, avoids managed package conflict)
+    - Parses form JSON
+    - Maps every form field to Lead API field
+    - Uses Database.update(l, false) -- partial success allowed
+    - Handles State/Country separately (picklist issues)
+    - Sends bell notification to Lead owner
+    - Generates Intake Summary PDF (Blob.toPdf)
+    - Attaches PDF to Lead
+
+  MANAGED PACKAGE FIX:
+    Problem: leadconvertchtr.leadConvertChatter package crashes
+    Fix: Database.update(l, false)
+         allOrNothing = false means: update what you can, skip errors
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SPECIAL SCENARIOS HANDLED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  SCENARIO 1: Client closes window before signing
+    Problem: Session = Submitted, client reopens -> empty form
+    Fix: Controller checks Status = Submitted
+         Generates FRESH signing URL from DocuSign API
+         Returns resumeSigning: true + fresh URL to LWC
+         LWC shows "Continue Signing" screen (not empty form)
+         Client clicks -> goes directly to DocuSign
+
+  SCENARIO 2: State/Country picklist error
+    Problem: Maharashtra or DL not valid in Salesforce picklist
+    Fix: State update is SEPARATE from main Lead update
+         tryUpdateStateCountry() runs independently
+         If fails -> only state skipped, all other fields saved
+
+  SCENARIO 3: Private library ownership error
+    Problem: Files created in wrong user context -> error
+    Fix: cv.FirstPublishLocationId = leadId
+         Publishes file directly to Lead record
+         Bypasses private library check
+
+  SCENARIO 4: Duplicate documents attached
+    Problem: Webhook fires multiple times -> 12 documents!
+    Fix: Document_Attached__c = true flag on session
+         Query: WHERE Document_Attached__c != true
+         Lock immediately at start of processing
+
+  SCENARIO 5: HTML encoding in form data
+    Problem: &quot; stored in JSON instead of "
+    Fix: Clean before saving:
+         formDataJSON.replace('&quot;', '"')
+                    .replace('&amp;', '&') etc.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SESSION STATUS FLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Created -------> Staff sends packet
+     |
+     v
+  Opened --------> Client opens the link
+     |
+     v
+  Submitted -----> Client fills form and submits
+     |              DocuSign envelope created
+     |              (if network breaks -> Resume Signing flow)
+     v
+  Signing Started -> Client viewing DocuSign
+     |
+     v
+  Signed --------> DocuSign webhook fires
+     |              Documents downloaded and attached
+     |              Lead fields updated
+     |
+     +-- Expired --> Token expired (72 hours limit)
+     +-- Error ----> Client declined or envelope voided
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ALL CLASSES AND WHAT THEY DO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  APEX CLASSES:
+  IntakeSessionService.cls       -> Creates session, token, sends email
+  IntakePrefillController.cls    -> Returns prefill data + resume signing
+  IntakeSubmitController.cls     -> Processes submission, calls DocuSign
+  DocuSignAuthService.cls        -> JWT auth with DocuSign API
+  DocuSignEnvelopeService.cls    -> Creates envelope, prefills, sign URL
+  DocuSignWebhookController.cls  -> REST endpoint for DocuSign callbacks
+  DocuSignDocumentQueueable.cls  -> Downloads signed PDF + certificate
+  DocuSignDocumentBatch.cls      -> Batch version for multiple sessions
+  DocuSignDocumentScheduler.cls  -> Schedules batch 1 min after signing
+  LeadUpdateService.cls          -> Updates Lead fields (@future)
+  IntakeSessionTriggerHandler.cls -> Trigger logic handler
+  SendIntakePacketController.cls -> Quick Action controller
+  SessionExpiryBatch.cls         -> Daily batch to expire old sessions
+
+  TRIGGERS:
+  IntakeSessionTrigger.trigger   -> After Status=Signed -> queue download
+
+  LWC COMPONENTS:
+  intakeForm                     -> 8-step form on Experience Cloud
+  sendIntakePacket               -> Quick Action popup on Lead
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  DOCUSIGN API CALLS MADE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. GET ACCESS TOKEN
+     POST https://account-d.docusign.com/oauth/token
+     Body: JWT (signed with RSA key)
+     Returns: Bearer access_token (valid 1 hour)
+
+  2. CREATE ENVELOPE
+     POST https://demo.docusign.net/restapi/v2.1/accounts/{id}/envelopes
+     Body: templateId + signer + ALL form field tab values
+     Returns: envelopeId
+
+  3. GET SIGNING URL
+     POST .../envelopes/{envId}/views/recipient
+     Body: signer email + name + clientUserId
+     Returns: signing URL (expires in 5 minutes!)
+
+  4. CHECK ENVELOPE STATUS
+     GET .../envelopes/{envId}
+     Returns: { "status": "completed" }
+
+  5. GET DOCUMENT LIST
+     GET .../envelopes/{envId}/documents
+     Returns: list of documents with IDs and types
+
+  6. DOWNLOAD SIGNED DOCUMENT
+     GET .../envelopes/{envId}/documents/1
+     Returns: PDF blob (the signed contract)
+
+  7. DOWNLOAD COMPLETION CERTIFICATE
+     GET .../envelopes/{envId}/documents/certificate
+     Returns: PDF blob (DocuSign audit trail)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CONFIGURATION STORED IN CUSTOM METADATA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  DocuSign_Config__mdt:
+    Integration_Key__c     -> 02e58c53-ae17-4993-bd9c-0cb63cd61a66
+    Account_ID__c          -> 6b8d7ad5-b370-4635-8581-81b982a36d6
+    User_ID__c             -> 630b69a4-408b-4c8c-975f-a6fd486b63e3
+    Base_URI__c            -> https://demo.docusign.net
+    Auth_URI__c            -> https://account-d.docusign.com
+    Template_ID__c         -> 559c2652-84db-4f50-afd7-f424be494516
+    RSA_Private_Key__c     -> (RSA private key for JWT signing)
+    Intake_Form_Base_URL__c -> https://mccraw--partial.sandbox.my.site.com/intake
+
+  Intake_Template_Config__mdt:
+    Maps Incident_Type + Signer_Type -> DocuSign Template ID
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  KEY SALESFORCE RULES WE FOLLOWED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  RULE 1: No DML before Callouts
+    Wrong:  update session;   <- DML first
+            Http.send(req);   <- CRASHES!
+    Right:  Http.send(req);   <- Callout first
+            update session;   <- DML after
+
+  RULE 2: Guest User Cannot Create Files
+    Experience Cloud form runs as Guest User
+    Guest cannot create ContentVersion (files)
+    Fix: Trigger/Queueable runs in System context
+
+  RULE 3: Batch Size = 1 for Callout Classes
+    Each session needs 4 API calls to DocuSign
+    Salesforce allows 100 callouts per transaction
+    Batch size = 1 keeps us well within limits
+
+  RULE 4: @future for Lead Updates
+    Direct Lead update causes package trigger to crash
+    @future runs in new transaction, bypasses conflict
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  WHAT STAFF SEES AFTER CLIENT COMPLETES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  On the Lead Record:
+
+  All form fields filled in Lead:
+    Name, Address, Injuries, Incident details, Insurance info, etc.
+
+  Files Tab shows 3 documents:
+    Intake_Form_John_Smith_2026-06-10.pdf          <- form summary (auto)
+    Signed_Intake_John_Smith_2026-06-10.pdf        <- signed contract
+    Signing_Certificate_John_Smith_2026-06-10.pdf  <- DocuSign audit
+
+  Activity Timeline shows:
+    Task: "Intake Form Submitted - Review Required"
+    Task: "Intake Signed - Documents Ready for Review"
+
+  Bell Notification sent to Lead owner
+
+  Email sent to Lead owner:
+    "Client John Smith has signed their intake"
+
+  Intake_Session__c record:
+    Status: Signed
+    Signer Name: John Smith
+    Signed Datetime: 06/10/2026 12:30 PM
+    Document_Attached__c: true
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Form shows "already submitted"
+    Check session Status in Salesforce
+    Reset: s.Status__c = 'Opened'; update s;
+
+  Form is empty (no prefill)
+    Check Lead fields are populated
+    Check F12 console for session result
+    Check IntakePrefillController is deployed
+
+  DocuSign fields not prefilling
+    Check DocuSign template has Data Labels set
+    Labels must EXACTLY match DocuSignEnvelopeService.cls
+
+  Document not attaching to Lead
+    Check Document_Attached__c = false on session
+    Run: System.enqueueJob(new DocuSignDocumentQueueable('SESSION_ID'));
+
+  Lead fields not updating
+    Check LeadUpdateService @future debug log
+    State errors are expected (handled separately)
+
+  Email not received
+    Check template DeveloperName = Intake_Form_Email_Template
+    Check Intake_Form_URL__c on session is populated
+    Check {INTAKE_URL} placeholder is in template
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  USEFUL EXECUTE ANONYMOUS SNIPPETS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // 1. Check latest session
+  List<Intake_Session__c> s = [SELECT Id, Status__c, Lead__c,
+    DocuSign_Envelope_Id__c, Document_Attached__c, Signer_Name__c
+    FROM Intake_Session__c ORDER BY CreatedDate DESC LIMIT 3];
+  for(Intake_Session__c r : s)
+    System.debug(r.Status__c + ' | ' + r.Signer_Name__c + ' | ' + r.Id);
+
+  // 2. Reset session for re-testing
+  Intake_Session__c s = [SELECT Id FROM Intake_Session__c
+    ORDER BY CreatedDate DESC LIMIT 1];
+  s.Status__c = 'Opened';
+  update s;
+
+  // 3. Reset document flag (run SEPARATE from step 4!)
+  Intake_Session__c s = [SELECT Id FROM Intake_Session__c
+    WHERE Status__c = 'Signed' ORDER BY CreatedDate DESC LIMIT 1];
+  s.Document_Attached__c = false;
+  update s;
+
+  // 4. Run document download (SEPARATE execution!)
+  System.enqueueJob(new DocuSignDocumentQueueable('YOUR_SESSION_ID'));
+
+  // 5. Check Lead files
+  Lead l = [SELECT Id,
+    (SELECT ContentDocument.Title FROM ContentDocumentLinks
+     ORDER BY ContentDocument.CreatedDate DESC)
+    FROM Lead WHERE Id = 'YOUR_LEAD_ID'];
+  for(ContentDocumentLink c : l.ContentDocumentLinks)
+    System.debug(c.ContentDocument.Title);
+
+  // 6. Force Lead update from session JSON
+  Intake_Session__c s = [SELECT Id, Lead__c, Submitted_Form_JSON__c
+    FROM Intake_Session__c WHERE Lead__c = 'LEAD_ID' LIMIT 1];
+  LeadUpdateService.updateLeadFromForm(s.Lead__c,
+    s.Submitted_Form_JSON__c, s.Id);
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Built with love by Tejas | McCraw Law Group Intake Automation | 2026
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
