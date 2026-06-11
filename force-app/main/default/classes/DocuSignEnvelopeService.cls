@@ -371,4 +371,19 @@ String todayDate = Date.today().format();
         }
         return defaultVal;
     }
+    
+    public static String getEmbeddedSigningURL(
+    String envelopeId,
+    String signerName,
+    String signerEmail
+) {
+    DocuSign_Config__mdt cfg = DocuSignAuthService.loadConfig();
+    String accessToken       = DocuSignAuthService.getAccessToken();
+
+    return getRecipientViewURL(
+        accessToken, cfg, envelopeId,
+        signerName, signerEmail,
+        ''   // ← empty — DocuSign uses its own return URL
+    );
+}
 }

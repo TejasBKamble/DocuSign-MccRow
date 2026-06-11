@@ -28,32 +28,21 @@ public class DocuSignDocumentQueueable implements Queueable, Database.AllowsCall
         Intake_Session__c session = sessions[0];
 
         try {
-            String accessToken          = DocuSignAuthService.getAccessToken();
-            DocuSign_Config__mdt cfg    = DocuSignAuthService.loadConfig();
+            String accessToken       = DocuSignAuthService.getAccessToken();
+            DocuSign_Config__mdt cfg = DocuSignAuthService.loadConfig();
 
             // 1. Verify envelope is completed
-            String status = getEnvelopeStatus(session.DocuSign_Envelope_Id__c, accessToken, cfg);
+            String status = getEnvelopeStatus(
+                session.DocuSign_Envelope_Id__c, accessToken, cfg
+            );
             System.debug('Envelope status: ' + status);
 
             if (status != 'completed') {
-                System.debug('⚠️ Envelope not completed yet: ' + status);
+                System.debug('⚠️ Not completed yet: ' + status);
                 return;
             }
 
-            // 2. Get document ID
-            String docId = getFirstDocumentId(session.DocuSign_Envelope_Id__c, accessToken, cfg);
-
-            // 3. Download PDF
-            Blob pdfBlob = downloadDocument(session.DocuSign_Envelope_Id__c, docId, accessToken, cfg);
-
-            if (pdfBlob == null || pdfBlob.size() == 0) {
-                System.debug('❌ Empty PDF for session: ' + sessionId);
-                return;
-            }
-
-            System.debug('PDF size: ' + pdfBlob.size());
-
-            // 4. Build file name
+            // ── Build shared values ──
             String safeName = String.isNotBlank(session.Signer_Name__c)
                 ? session.Signer_Name__c
                           .replaceAll('[^a-zA-Z0-9 ]', '')
@@ -61,53 +50,66 @@ public class DocuSignDocumentQueueable implements Queueable, Database.AllowsCall
                           .replace(' ', '_')
                 : 'Client';
 
-            String fileName = 'Signed_Intake_' + safeName +
-                '_' + DateTime.now().format('yyyy-MM-dd') + '.pdf';
-
-            // 5. Create ContentVersion — publish directly to Lead/Case
-            ContentVersion cv         = new ContentVersion();
-            cv.Title                  = fileName;
-            cv.PathOnClient           = fileName;
-            cv.VersionData            = pdfBlob;
-            cv.IsMajorVersion         = true;
-            cv.FirstPublishLocationId = session.Lead__c != null
+            String dateStr  = DateTime.now().format('yyyy-MM-dd');
+            String linkedId = session.Lead__c != null
                 ? session.Lead__c : session.Case__c;
-            insert cv;
 
-            System.debug('✅ ContentVersion inserted: ' + cv.Id);
+            // ── ALL CALLOUTS FIRST ──
 
-            // 6. Get ContentDocumentId
-            ContentVersion inserted = [
-                SELECT ContentDocumentId
-                FROM   ContentVersion
-                WHERE  Id = :cv.Id
-                LIMIT  1
-            ];
+            // 2. Get document ID
+            String docId = getFirstDocumentId(
+                session.DocuSign_Envelope_Id__c, accessToken, cfg
+            );
+            System.debug('Document ID: ' + docId);
 
-            // 7. Explicit link for visibility
-            try {
-                ContentDocumentLink cdl   = new ContentDocumentLink();
-                cdl.ContentDocumentId     = inserted.ContentDocumentId;
-                cdl.LinkedEntityId        = session.Lead__c != null
-                    ? session.Lead__c : session.Case__c;
-                cdl.ShareType             = 'V';
-                cdl.Visibility            = 'AllUsers';
-                insert cdl;
-            } catch (Exception linkEx) {
-                System.debug('Link note: ' + linkEx.getMessage());
+            // 3. Download signed PDF
+            Blob signedPdf = downloadDocument(
+                session.DocuSign_Envelope_Id__c, docId, accessToken, cfg
+            );
+            System.debug('Signed PDF size: ' +
+                (signedPdf != null ? signedPdf.size() : 0));
+
+            // 4. Download completion certificate
+            Blob certPdf = downloadDocument(
+                session.DocuSign_Envelope_Id__c, 'certificate', accessToken, cfg
+            );
+            System.debug('Certificate size: ' +
+                (certPdf != null ? certPdf.size() : 0));
+
+            // ── ALL DML AFTER CALLOUTS ──
+
+            // 5. Attach signed document
+            if (signedPdf != null && signedPdf.size() > 0) {
+                String fileName = 'Signed_Intake_' + safeName +
+                    '_' + dateStr + '.pdf';
+                attachToRecord(signedPdf, fileName, linkedId);
+                System.debug('✅ Signed doc attached: ' + fileName);
+            } else {
+                System.debug('❌ Signed PDF empty');
             }
 
-            // 8. Mark session as attached
+            // 6. Attach completion certificate
+            if (certPdf != null && certPdf.size() > 0) {
+                String certName = 'Signing_Certificate_' + safeName +
+                    '_' + dateStr + '.pdf';
+                attachToRecord(certPdf, certName, linkedId);
+                System.debug('✅ Certificate attached: ' + certName);
+            } else {
+                System.debug('❌ Certificate empty or null');
+            }
+
+            // 7. Mark session as attached
             update new Intake_Session__c(
                 Id                   = session.Id,
                 Document_Attached__c = true,
-                Document_Name__c     = fileName
+                Document_Name__c     = 'Signed_Intake_' + safeName +
+                    '_' + dateStr + '.pdf'
             );
 
-            System.debug('✅ Document attached to Lead/Case: ' + fileName);
+            System.debug('✅ Session marked attached: ' + session.Id);
 
         } catch (Exception e) {
-            System.debug('❌ DocuSignDocumentQueueable failed: ' + e.getMessage());
+            System.debug('❌ Failed: ' + e.getMessage());
             System.debug('Stack: ' + e.getStackTraceString());
         }
     }
@@ -117,8 +119,50 @@ public class DocuSignDocumentQueueable implements Queueable, Database.AllowsCall
     // PRIVATE HELPERS
     // ─────────────────────────────────────────
 
+    private void attachToRecord(
+        Blob fileBlob,
+        String fileName,
+        String recordId
+    ) {
+        // Create ContentVersion — publish directly to Lead
+        ContentVersion cv         = new ContentVersion();
+        cv.Title                  = fileName.replace('.pdf', '');
+        cv.PathOnClient           = fileName;
+        cv.VersionData            = fileBlob;
+        cv.IsMajorVersion         = true;
+        cv.FirstPublishLocationId = recordId;
+        insert cv;
+
+        System.debug('✅ ContentVersion: ' + cv.Id + ' | ' + fileName);
+
+        // Get ContentDocumentId
+        ContentVersion inserted = [
+            SELECT ContentDocumentId
+            FROM   ContentVersion
+            WHERE  Id = :cv.Id
+            LIMIT  1
+        ];
+
+        // Explicit link — FirstPublishLocationId already links it
+        // but add explicit for visibility
+        try {
+            ContentDocumentLink cdl = new ContentDocumentLink();
+            cdl.ContentDocumentId   = inserted.ContentDocumentId;
+            cdl.LinkedEntityId      = recordId;
+            cdl.ShareType           = 'V';
+            cdl.Visibility          = 'AllUsers';
+            insert cdl;
+        } catch (Exception linkEx) {
+            // Already linked via FirstPublishLocationId — OK
+            System.debug('Link note: ' + linkEx.getMessage());
+        }
+    }
+
+
     private String getEnvelopeStatus(
-        String envelopeId, String accessToken, DocuSign_Config__mdt cfg
+        String envelopeId,
+        String accessToken,
+        DocuSign_Config__mdt cfg
     ) {
         HttpRequest req = new HttpRequest();
         req.setEndpoint(cfg.Base_URI__c +
@@ -140,7 +184,9 @@ public class DocuSignDocumentQueueable implements Queueable, Database.AllowsCall
 
 
     private String getFirstDocumentId(
-        String envelopeId, String accessToken, DocuSign_Config__mdt cfg
+        String envelopeId,
+        String accessToken,
+        DocuSign_Config__mdt cfg
     ) {
         HttpRequest req = new HttpRequest();
         req.setEndpoint(cfg.Base_URI__c +
@@ -161,7 +207,8 @@ public class DocuSignDocumentQueueable implements Queueable, Database.AllowsCall
                 String docId   = (String) doc.get('documentId');
                 String docType = (String) doc.get('type');
                 System.debug('Doc: ' + docId + ' | Type: ' + docType);
-                if (docType != 'summary' && docId != 'certificate') return docId;
+                if (docType != 'summary' && docId != 'certificate')
+                    return docId;
             }
         }
         return '1';
@@ -169,7 +216,10 @@ public class DocuSignDocumentQueueable implements Queueable, Database.AllowsCall
 
 
     private Blob downloadDocument(
-        String envelopeId, String docId, String accessToken, DocuSign_Config__mdt cfg
+        String envelopeId,
+        String docId,
+        String accessToken,
+        DocuSign_Config__mdt cfg
     ) {
         HttpRequest req = new HttpRequest();
         req.setEndpoint(cfg.Base_URI__c +
@@ -182,9 +232,12 @@ public class DocuSignDocumentQueueable implements Queueable, Database.AllowsCall
         req.setTimeout(30000);
 
         HttpResponse res = new Http().send(req);
-        System.debug('Download status: ' + res.getStatusCode());
+        System.debug('Download [' + docId + '] status: ' +
+            res.getStatusCode());
+
         if (res.getStatusCode() == 200) return res.getBodyAsBlob();
-        System.debug('Download failed: ' + res.getBody());
+
+        System.debug('Download failed [' + docId + ']: ' + res.getBody());
         return null;
     }
 }

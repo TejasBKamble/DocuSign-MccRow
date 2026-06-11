@@ -21,6 +21,9 @@ export default class IntakeForm extends LightningElement {
     @track errorMessage   = '';
     @track formErrorMessage = '';
 
+    @track isResumingSigning = false;
+    @track resumeSigningURL  = '';
+
     @track formData = {
         // Step 1 — Contact
         fullName        : '', street          : '',
@@ -93,47 +96,100 @@ export default class IntakeForm extends LightningElement {
      get FutterlogoURL() {
      return FutterLogo;
     }
-    // ── Load session ──
-    // loadSession() {
-    //     getSessionData({ token: this.token })
-    //     .then(result => {
-    //         this.isLoading = false;
-    //         if (result.error) {
-    //             this.hasError     = true;
-    //             this.errorMessage = result.error;
-    //             return;
-    //         }
-    //         this.sessionId    = result.sessionId;
-    //         this.incidentType = result.incidentType;
 
-    //         // Prefill from session
-    //         if (result.prefill) {
-    //             const p = result.prefill;
-    //             this.formData = {
-    //                 ...this.formData,
-    //                 fullName       : (p.firstName || '') + (p.lastName ? ' ' + p.lastName : ''),
-    //                 street         : p.street          || '',
-    //                 city           : p.city            || '',
-    //                 state          : p.state           || '',
-    //                 postalCode     : p.postalCode      || '',
-    //                 phone          : p.phone           || '',
-    //                 email          : p.email           || '',
-    //                 dateOfBirth    : p.dateOfBirth     || '',
-    //                 ssn            : p.ssn             || '',
-    //                 driversLicense : p.driversLicense  || '',
-    //                 howDidYouHear  : p.howDidYouHear   || '',
-    //                 currentEmployer: p.currentEmployer || ''
-    //             };
-    //         }
-    //     })
-    //     .catch(error => {
-    //         this.isLoading    = false;
-    //         this.hasError     = true;
-    //         this.errorMessage = error.body ? error.body.message : error.message;
-    //     });
-    // }
 
-    loadSession() {
+    handleResumeSigning() {
+        console.log('Resuming signing:', this.resumeSigningURL);
+        if (this.resumeSigningURL) {
+            window.location.href = this.resumeSigningURL;
+        }
+    }
+
+//     loadSession() {
+//     getSessionData({ token: this.token })
+//     .then(result => {
+//         this.isLoading = false;
+
+//         if (result.error) {
+//             this.hasError     = true;
+//             this.errorMessage = result.error;
+//             return;
+//         }
+
+//         this.sessionId    = result.sessionId    || '';
+//         this.incidentType = result.incidentType || '';
+
+//         // ── Apply prefill from Lead ──
+//         if (result.prefill) {
+//             const p = result.prefill;
+
+//             // ── Build full name ──
+//             // Controller returns 'fullName' directly
+//             // fallback to firstName+lastName if old format
+//             let fullName = '';
+//             if (p.fullName) {
+//                 fullName = p.fullName;
+//             } else if (p.firstName || p.lastName) {
+//                 fullName = ((p.firstName || '') + ' ' +
+//                            (p.lastName  || '')).trim();
+//             }
+
+//             this.formData = {
+//                 ...this.formData,
+
+//                 // ── Personal ──
+//                 fullName        : fullName,
+//                 email           : p.email           || '',
+//                 phone           : p.phone           || '',
+//                 dateOfBirth     : p.dateOfBirth     || '',
+//                 ssn             : p.ssn             || '',
+//                 driversLicense  : p.driversLicense  || '',
+
+//                 // ── Address ──
+//                 street          : p.street          || '',
+//                 city            : p.city            || '',
+//                 state           : p.state           || '',
+//                 postalCode      : p.postalCode       || '',
+
+//                 // ── Occupation ──
+//                 currentEmployer : p.currentEmployer || '',
+
+//                 // ── How Did You Hear — from LeadSource ──
+//                 howDidYouHear   : p.howDidYouHear   || '',
+
+//                 // ── Incident ──
+//                 incidentDate            : this.cleanDate(p.incidentDate),
+//                 incidentType            : p.incidentType            || this.incidentType || '',
+//                 incidentLocation        : p.incidentLocation        || '',
+//                 witnessDetails          : p.witnessDetails          || '',
+//                 descriptionOfAccident   : p.descriptionOfAccident   || ''
+//             };
+
+//             // ── Also update incidentType at component level ──
+//             if (p.incidentType) {
+//                 this.incidentType = p.incidentType;
+//             }
+
+//             console.log('✅ Prefill applied:', JSON.stringify({
+//                 fullName      : this.formData.fullName,
+//                 email         : this.formData.email,
+//                 phone         : this.formData.phone,
+//                 howDidYouHear : this.formData.howDidYouHear,
+//                 incidentDate  : this.formData.incidentDate,
+//                 incidentType  : this.incidentType
+//             }));
+//         }
+//     })
+//     .catch(error => {
+//         this.isLoading    = false;
+//         this.hasError     = true;
+//         this.errorMessage = error.body
+//             ? error.body.message : error.message;
+//         console.log('Load session error:', JSON.stringify(error));
+//     });
+// }
+
+loadSession() {
     getSessionData({ token: this.token })
     .then(result => {
         this.isLoading = false;
@@ -144,68 +200,51 @@ export default class IntakeForm extends LightningElement {
             return;
         }
 
+        // ── Resume signing if submitted but not signed ──
+        if (result.resumeSigning && result.signingURL) {
+            console.log('Resuming signing:', result.signingURL);
+            this.isResumingSigning = true;
+            this.resumeSigningURL  = result.signingURL;
+            return;
+        }
+
+        // ── Normal flow ──
         this.sessionId    = result.sessionId    || '';
         this.incidentType = result.incidentType || '';
 
-        // ── Apply prefill from Lead ──
         if (result.prefill) {
             const p = result.prefill;
-
-            // ── Build full name ──
-            // Controller returns 'fullName' directly
-            // fallback to firstName+lastName if old format
-            let fullName = '';
-            if (p.fullName) {
-                fullName = p.fullName;
-            } else if (p.firstName || p.lastName) {
+            let fullName = p.fullName || '';
+            if (!fullName && (p.firstName || p.lastName)) {
                 fullName = ((p.firstName || '') + ' ' +
                            (p.lastName  || '')).trim();
             }
 
             this.formData = {
                 ...this.formData,
-
-                // ── Personal ──
                 fullName        : fullName,
                 email           : p.email           || '',
                 phone           : p.phone           || '',
-                dateOfBirth     : p.dateOfBirth     || '',
+                dateOfBirth     : this.cleanDate(p.dateOfBirth),
                 ssn             : p.ssn             || '',
                 driversLicense  : p.driversLicense  || '',
-
-                // ── Address ──
                 street          : p.street          || '',
                 city            : p.city            || '',
                 state           : p.state           || '',
                 postalCode      : p.postalCode       || '',
-
-                // ── Occupation ──
                 currentEmployer : p.currentEmployer || '',
-
-                // ── How Did You Hear — from LeadSource ──
                 howDidYouHear   : p.howDidYouHear   || '',
-
-                // ── Incident ──
-                incidentDate            : this.cleanDate(p.incidentDate),
-                incidentType            : p.incidentType            || this.incidentType || '',
-                incidentLocation        : p.incidentLocation        || '',
-                witnessDetails          : p.witnessDetails          || '',
-                descriptionOfAccident   : p.descriptionOfAccident   || ''
+                incidentDate    : this.cleanDate(p.incidentDate),
+                incidentType    : p.incidentType    || this.incidentType || '',
+                  // ── ADD THESE TWO ──
+                incidentLocation     : p.incidentLocation    || '',
+                descriptionOfAccident: p.descriptionOfAccident || '',
+                witnessDetails       : p.witnessDetails      || ''
             };
 
-            // ── Also update incidentType at component level ──
             if (p.incidentType) {
                 this.incidentType = p.incidentType;
             }
-
-            console.log('✅ Prefill applied:', JSON.stringify({
-                fullName      : this.formData.fullName,
-                email         : this.formData.email,
-                phone         : this.formData.phone,
-                howDidYouHear : this.formData.howDidYouHear,
-                incidentDate  : this.formData.incidentDate,
-                incidentType  : this.incidentType
-            }));
         }
     })
     .catch(error => {
@@ -213,17 +252,21 @@ export default class IntakeForm extends LightningElement {
         this.hasError     = true;
         this.errorMessage = error.body
             ? error.body.message : error.message;
-        console.log('Load session error:', JSON.stringify(error));
     });
 }
+
 cleanDate(val) {
     if (!val) return '';
-    // Remove time portion if present
     return String(val).substring(0, 10);
 }
 
     // ── Step visibility ──
-    get showForm()       { return !this.isLoading && !this.hasError; }
+    //get showForm()       { return !this.isLoading && !this.hasError; }
+    get showForm() {
+    return !this.isLoading &&
+           !this.hasError  &&
+           !this.isResumingSigning;
+     }
     get isWelcomeStep()  { return this.currentStep === 0; }
     get isStep1()        { return this.currentStep === 1; }
     get isStep2()        { return this.currentStep === 2; }

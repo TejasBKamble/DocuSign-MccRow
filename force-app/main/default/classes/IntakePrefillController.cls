@@ -14,8 +14,8 @@ global without sharing class IntakePrefillController {
             SELECT Id, Status__c, Incident_Type__c,
                    Signer_Type__c, Signer_Name__c,
                    Signer_Email__c, Prefill_JSON__c,
-                   Lead__c                          // ← add
-                            // ← add
+                   Signing_URL__c,
+                   Lead__c
             FROM   Intake_Session__c
             WHERE  Session_Token__c = :token
             LIMIT  1
@@ -29,15 +29,85 @@ global without sharing class IntakePrefillController {
 
         Intake_Session__c session = sessions[0];
 
-
-        // ── Status check ──
-        if (session.Status__c == 'Submitted' ||
-            session.Status__c == 'Signed'    ||
+        // ── Already fully signed — block ──
+        if (session.Status__c == 'Signed' ||
             session.Status__c == 'Expired') {
             result.put('error',
-                'This intake form has already been completed.');
+                'This intake has already been completed. ' +
+                'Please contact the firm if you need assistance.');
             return result;
         }
+
+        // ── Submitted but not signed — Resume signing ──
+       /* if (session.Status__c == 'Submitted') {
+            if (String.isNotBlank(session.Signing_URL__c)) {
+                // ── Has signing URL — let client resume ──
+                System.debug('Resuming signing for session: ' + session.Id);
+                result.put('sessionId',     session.Id);
+                result.put('resumeSigning', true);
+                result.put('signingURL',    session.Signing_URL__c);
+                result.put('signerName',    session.Signer_Name__c);
+                result.put('incidentType',  session.Incident_Type__c);
+                result.put('error',         null);
+                return result;
+            } else {
+                // ── No signing URL — reset so user can resubmit ──
+                System.debug('No signing URL — resetting session: ' + session.Id);
+                session.Status__c = 'Opened';
+                update session;
+                // Falls through to normal form load below
+            }
+        }*/
+        
+        // ── Submitted but not signed — Resume signing ──
+if (session.Status__c == 'Submitted') {
+
+    System.debug('Session submitted — attempting resume: ' + session.Id);
+
+    // ── Always regenerate fresh signing URL ──
+    // Stored URL expires after 5 minutes
+    try {
+        // Get signer details
+        String signerName  = session.Signer_Name__c;
+        String signerEmail = session.Signer_Email__c;
+
+     
+
+        // ── Generate fresh signing URL ──
+        String freshURL = DocuSignEnvelopeService.getEmbeddedSigningURL(
+          session.DocuSign_Envelope_Id__c,
+        session.Signer_Name__c,
+        session.Signer_Email__c
+            
+        );
+
+        System.debug('✅ Fresh signing URL generated');
+
+        // ── Save fresh URL to session ──
+        update new Intake_Session__c(
+            Id             = session.Id,
+            Signing_URL__c = freshURL
+        );
+
+        result.put('sessionId',     session.Id);
+        result.put('resumeSigning', true);
+        result.put('signingURL',    freshURL);
+        result.put('signerName',    session.Signer_Name__c);
+        result.put('incidentType',  session.Incident_Type__c);
+        result.put('error',         null);
+        return result;
+
+    } catch (Exception e) {
+        System.debug('⚠️ Could not regenerate URL: ' + e.getMessage());
+
+        // ── Reset to Opened so user can resubmit ──
+        update new Intake_Session__c(
+            Id        = session.Id,
+            Status__c = 'Opened'
+        );
+        // Falls through to normal form load
+    }
+}
 
         // ── Mark Opened ──
         if (session.Status__c == 'Created') {
@@ -51,6 +121,7 @@ global without sharing class IntakePrefillController {
         result.put('signerType',   session.Signer_Type__c);
         result.put('signerName',   session.Signer_Name__c);
         result.put('signerEmail',  session.Signer_Email__c);
+        result.put('resumeSigning',false);
         result.put('error',        null);
 
         // ── Build Prefill Map ──
@@ -79,7 +150,6 @@ global without sharing class IntakePrefillController {
         }
 
         // ── Step 2: Enrich from Lead directly ──
-        // Lead fields override/add to Prefill_JSON data
         if (session.Lead__c != null) {
             try {
                 Lead l = [
@@ -116,19 +186,21 @@ global without sharing class IntakePrefillController {
                 if (l.Type_of_Accident__c != null)
                     prefillMap.put('incidentType', l.Type_of_Accident__c);
 
-                // ── Incident Date — from Lead ──
-             if (l.Incident_Date__c != null)
-               prefillMap.put('incidentDate',
-                 String.valueOf(l.Incident_Date__c).substring(0, 10));
+                // ── Incident Date — strip time ──
+                if (l.Incident_Date__c != null)
+                    prefillMap.put('incidentDate',
+                        String.valueOf(l.Incident_Date__c).substring(0, 10));
+
+                // ── Date of Birth — strip time ──
+                if (l.Date_of_Birth__c != null)
+                    prefillMap.put('dateOfBirth',
+                        String.valueOf(l.Date_of_Birth__c).substring(0, 10));
 
                 // ── How Did You Hear — LeadSource ──
                 if (l.LeadSource != null)
                     prefillMap.put('howDidYouHear', l.LeadSource);
 
                 // ── Other fields ──
-                if (l.Date_of_Birth__c != null)
-                    prefillMap.put('dateOfBirth',
-                        String.valueOf(l.Date_of_Birth__c));
                 if (l.Company != null)
                     prefillMap.put('currentEmployer', l.Company);
                 if (l.Street != null)
@@ -142,11 +214,14 @@ global without sharing class IntakePrefillController {
 
                 // ── Incident detail fields ──
                 if (l.Incident_Location__c != null)
-                    prefillMap.put('incidentLocation', l.Incident_Location__c);
+                    prefillMap.put('incidentLocation',
+                        l.Incident_Location__c);
                 if (l.Party_Witness_Info__c != null)
-                    prefillMap.put('witnessDetails', l.Party_Witness_Info__c);
+                    prefillMap.put('witnessDetails',
+                        l.Party_Witness_Info__c);
                 if (l.Description_of_Accident__c != null)
-                    prefillMap.put('descriptionOfAccident', l.Description_of_Accident__c);
+                    prefillMap.put('descriptionOfAccident',
+                        l.Description_of_Accident__c);
 
                 System.debug('Prefill after Lead merge: ' +
                     prefillMap.keySet());
@@ -160,13 +235,18 @@ global without sharing class IntakePrefillController {
         return result;
     }
 
+
     @AuraEnabled(cacheable=true)
     global static List<Map<String, String>> getLeadSourcePicklistValues() {
-        List<Map<String, String>> options = new List<Map<String, String>>();
-        options.add(new Map<String, String>{ 'label' => '--None--', 'value' => '' });
+        List<Map<String, String>> options =
+            new List<Map<String, String>>();
+        options.add(new Map<String, String>{
+            'label' => '--None--', 'value' => ''
+        });
         Schema.DescribeFieldResult fieldResult =
             Schema.Lead.LeadSource.getDescribe();
-        for (Schema.PicklistEntry entry : fieldResult.getPicklistValues()) {
+        for (Schema.PicklistEntry entry :
+                fieldResult.getPicklistValues()) {
             if (entry.isActive()) {
                 options.add(new Map<String, String>{
                     'label' => entry.getLabel(),

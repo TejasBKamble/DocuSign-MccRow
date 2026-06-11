@@ -118,6 +118,24 @@ public void execute(
             attachToRecord(certPdf, certName, linkedId);
             System.debug('✅ Certificate attached: ' + certName);
         }
+        // ── After downloading certPdf ──
+            System.debug('Signed PDF size : ' +
+                (signedPdf != null ? signedPdf.size() : 0));
+            System.debug('Cert PDF size   : ' +
+                (certPdf   != null ? certPdf.size()   : 0));
+            
+            if (certPdf == null || certPdf.size() == 0) {
+                System.debug('❌ Certificate empty — trying again with different approach');
+            
+                // ── Try combined document endpoint as fallback ──
+                certPdf = downloadDocument(
+                    session.DocuSign_Envelope_Id__c,
+                    'combined',
+                    accessToken, cfg
+                );
+                System.debug('Combined PDF size: ' +
+                    (certPdf != null ? certPdf.size() : 0));
+            }
 
         toUpdate.add(new Intake_Session__c(
             Id                   = session.Id,
